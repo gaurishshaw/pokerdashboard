@@ -4,7 +4,13 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="1313 Poker Dashboard", layout="wide", initial_sidebar_state="expanded")
+# --- CONFIGURATION ---
+st.set_page_config(
+    page_title="1313 Poker Dashboard", 
+    page_icon="🃏",  # Adds the deck of cards to your browser tab!
+    layout="wide", 
+    initial_sidebar_state="expanded"
+)
 
 # --- DATA LOADING ---
 DATA_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRNrlI9B6sz9BIMmG2l_ego6Zno6js1V5zxVlNps7Lzb--Mvt-EsIFwBXFO_cp4Aw/pub?gid=367894725&single=true&output=csv" 
@@ -46,12 +52,22 @@ except Exception as e:
     st.stop()
 
 # --- SIDEBAR NAVIGATION & FILTERS ---
-st.sidebar.image("https://cdn-icons-png.flaticon.com/512/105/105220.png", width=50)
+st.sidebar.markdown(
+    """
+    <div style='text-align: center; font-size: 36px; letter-spacing: 15px; margin-bottom: -15px;'>
+        <span style='color: white;'>♠️</span>
+        <span style='color: #ff4b4b;'>♥️</span>
+        <span style='color: #ff4b4b;'>♦️</span>
+        <span style='color: white;'>♣️</span>
+    </div>
+    """, 
+    unsafe_allow_html=True
+)
 st.sidebar.title("1313 Poker")
 
 view_selection = st.sidebar.radio(
     "Go To View:",
-    ["🌍 Global Overview", "🎯 Player Deep-Dive", "📓 Game Ledger"]
+    ["🌍 Global Overview", "🎯 Player Deep-Dive", "🎲 Single Game Analysis", "📓 Game Ledger"]
 )
 
 st.sidebar.divider()
@@ -59,7 +75,7 @@ st.sidebar.divider()
 st.sidebar.header("Global Filters")
 all_players = sorted(df_long['Player'].unique())
 
-if view_selection == "🌍 Global Overview" or view_selection == "📓 Game Ledger":
+if view_selection in ["🌍 Global Overview", "📓 Game Ledger"]:
     selected_players = st.sidebar.multiselect("Select Players", all_players, default=all_players)
     filtered_df = df_long[df_long['Player'].isin(selected_players)]
 else:
@@ -77,7 +93,6 @@ if view_selection == "🌍 Global Overview":
     if not leaderboard.empty:
         col1, col2, col3, col4, col5 = st.columns(5)
         
-        # FIXED: Count the actual number of valid game rows
         total_valid_games = len(df_raw['Game #'].unique())
         col1.metric("Total Games", total_valid_games)
         
@@ -155,7 +170,68 @@ elif view_selection == "🎯 Player Deep-Dive":
             st.plotly_chart(fig_hist, use_container_width=True)
 
 # ==========================================
-# VIEW 3: GAME Ledger (RAW DATA)
+# VIEW 3: SINGLE GAME ANALYSIS
+# ==========================================
+elif view_selection == "🎲 Single Game Analysis":
+    st.title("🎲 Single Game Analysis")
+    st.markdown("Breakdown of performance for a specific session.")
+    
+    # Create dropdown options formatted as "Game # - Date"
+    df_dates = df_raw[['Game #', 'Date']].drop_duplicates().sort_values('Game #', ascending=False)
+    game_options = []
+    
+    for _, row in df_dates.iterrows():
+        g_num = int(row['Game #'])
+        date_str = row['Date'].strftime('%b %d, %Y')
+        game_options.append(f"Game {g_num} - {date_str}")
+        
+    selected_game_str = st.selectbox("Select a Session", game_options)
+    
+    # Extract the game number from the selected string
+    selected_game_num = int(selected_game_str.split(" ")[1])
+    
+    # Filter data for this exact game
+    game_data = df_long[df_long['Game #'] == selected_game_num].sort_values('Profit', ascending=False)
+    
+    if not game_data.empty:
+        st.divider()
+        
+        # Calculate specific metrics for this game
+        top_winner = game_data.iloc[0]
+        biggest_loser = game_data.iloc[-1]
+        total_pot = game_data[game_data['Profit'] > 0]['Profit'].sum()
+        
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric(f"🏆 Winner ({top_winner['Player']})", f"₹{top_winner['Profit']:,.0f}")
+        c2.metric(f"📉 Loser ({biggest_loser['Player']})", f"₹{biggest_loser['Profit']:,.0f}")
+        c3.metric("💰 Total Pot Exchanged", f"₹{total_pot:,.0f}")
+        c4.metric("👥 Players Present", len(game_data))
+        
+        st.divider()
+        
+        col_bar, col_table = st.columns([2, 1])
+        
+        with col_bar:
+            st.subheader(f"Results Chart")
+            # Bar chart for the specific game
+            fig_game_bar = px.bar(game_data, x='Player', y='Profit',
+                                  color='Profit', color_continuous_scale='RdYlGn',
+                                  template="plotly_dark")
+            fig_game_bar.update_layout(xaxis_title="Player", yaxis_title="Net Profit/Loss (₹)")
+            st.plotly_chart(fig_game_bar, use_container_width=True)
+            
+        with col_table:
+            st.subheader("Leaderboard")
+            display_table = game_data[['Player', 'Profit']].reset_index(drop=True)
+            st.dataframe(
+                display_table.style.format({'Profit': "{:,.0f}"})
+                .background_gradient(cmap='RdYlGn', subset=['Profit']),
+                use_container_width=True, height=400
+            )
+
+
+# ==========================================
+# VIEW 4: GAME LEDGER (RAW DATA)
 # ==========================================
 elif view_selection == "📓 Game Ledger":
     st.title("📓 Game Ledger & Raw Data")
@@ -183,5 +259,4 @@ elif view_selection == "📓 Game Ledger":
     # Format the date nicely for the raw history view
     df_raw_display = df_raw.copy()
     df_raw_display['Date'] = df_raw_display['Date'].dt.strftime('%Y-%m-%d')
-    
     st.dataframe(df_raw_display, use_container_width=True)
