@@ -163,7 +163,7 @@ elif view_selection == "🎯 Player Deep-Dive":
         
         # 1. Last 5 Games Form
         last_5 = profits[-5:] if len(profits) >= 5 else profits
-        form_str = " - ".join(["✅ W" if x > 0 else ("❌ L" if x < 0 else "➖ D") for x in last_5])
+        form_str = " ".join(["🟩" if x > 0 else ("🟥" if x < 0 else "⬜") for x in last_5])
         
         # 2. Current Streak
         current_streak = 0
